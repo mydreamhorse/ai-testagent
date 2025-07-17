@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>汽车座椅测试智能体 - 连接测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin: 20px 0;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        .test-section {
+            margin: 25px 0;
+            padding: 20px;
+            border: 1px solid #e1e8ed;
+            border-radius: 8px;
+            background: #fafbfc;
+        }
+        .success { 
+            background-color: #d4edda; 
+            border-color: #c3e6cb;
+        }
+        .error { 
+            background-color: #f8d7da; 
+            border-color: #f5c6cb;
+        }
+        .info { 
+            background-color: #d1ecf1; 
+            border-color: #bee5eb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 8px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-primary { 
+            background-color: #007bff; 
+            color: white; 
+        }
+        .btn-primary:hover { background-color: #0056b3; }
+        .btn-success { 
+            background-color: #28a745; 
+            color: white; 
+        }
+        .btn-success:hover { background-color: #1e7e34; }
+        .btn-danger { 
+            background-color: #dc3545; 
+            color: white; 
+        }
+        .btn-danger:hover { background-color: #c82333; }
+        .btn-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        .btn-warning:hover { background-color: #e0a800; }
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .status-card {
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .status-card.success { background-color: #d4edda; }
+        .status-card.error { background-color: #f8d7da; }
+        .status-card.info { background-color: #d1ecf1; }
+        .log-area {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 汽车座椅软件测试智能体</h1>
+            <h2>系统连接测试</h2>
+        </div>
+        
+        <div class="test-section info">
+            <h3>📊 系统状态概览</h3>
+            <div class="status-grid">
+                <div class="status-card" id="frontend-status">
+                    <h4>前端服务</h4>
+                    <p>http://localhost:3000</p>
+                    <span class="loading" id="frontend-loading"></span>
+                </div>
+                <div class="status-card" id="backend-status">
+                    <h4>后端API</h4>
+                    <p>http://localhost:8000</p>
+                    <span class="loading" id="backend-loading"></span>
+                </div>
+                <div class="status-card" id="api-docs-status">
+                    <h4>API文档</h4>
+                    <p>http://localhost:8000/docs</p>
+                    <span class="loading" id="docs-loading"></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔧 后端API测试</h3>
+            <button class="btn-primary" onclick="testBackend()">测试后端连接</button>
+            <button class="btn-success" onclick="testAuth()">测试认证API</button>
+            <button class="btn-warning" onclick="testHealth()">健康检查</button>
+            <div id="backend-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🎨 前端应用测试</h3>
+            <button class="btn-primary" onclick="openFrontend()">打开前端应用</button>
+            <button class="btn-success" onclick="testFrontendAPI()">测试前端API调用</button>
+            <div id="frontend-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🐛 故障排除</h3>
+            <button class="btn-danger" onclick="restartServices()">重启服务</button>
+            <button class="btn-primary" onclick="checkLogs()">检查日志</button>
+            <button class="btn-warning" onclick="clearCache()">清除缓存</button>
+            <div id="troubleshoot-result"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📝 测试日志</h3>
+            <div class="log-area" id="log-area"></div>
+        </div>
+    </div>
+
+    <script>
+        // 日志功能
+        function log(message, type = 'info') {
+            const logArea = document.getElementById('log-area');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            logArea.textContent += logEntry;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // 更新状态卡片
+        function updateStatusCard(cardId, status, message) {
+            const card = document.getElementById(cardId);
+            const loading = document.getElementById(cardId.replace('-status', '-loading'));
+            
+            if (status === 'success') {
+                card.className = 'status-card success';
+                loading.innerHTML = '✅';
+            } else if (status === 'error') {
+                card.className = 'status-card error';
+                loading.innerHTML = '❌';
+            } else {
+                card.className = 'status-card info';
+                loading.innerHTML = '<span class="loading"></span>';
+            }
+            
+            if (message) {
+                card.querySelector('p').textContent = message;
+            }
+        }
+
+        // 测试后端连接
+        async function testBackend() {
+            const resultDiv = document.getElementById('backend-result');
+            resultDiv.innerHTML = '<p><span class="loading"></span> 测试中...</p>';
+            log('开始测试后端连接');
+            
+            try {
+                const response = await fetch('http://localhost:8000/');
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ 后端连接成功</h4>
+                        <p><strong>响应:</strong> ${JSON.stringify(data, null, 2)}</p>
+                    </div>
+                `;
+                updateStatusCard('backend-status', 'success', '连接正常');
+                log('后端连接测试成功');
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ 后端连接失败</h4>
+                        <p><strong>错误:</strong> ${error.message}</p>
+                    </div>
+                `;
+                updateStatusCard('backend-status', 'error', '连接失败');
+                log(`后端连接测试失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 测试认证API
+        async function testAuth() {
+            const resultDiv = document.getElementById('backend-result');
+            resultDiv.innerHTML = '<p><span class="loading"></span> 测试认证API...</p>';
+            log('开始测试认证API');
+            
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: 'testuser',
+                        email: 'test@example.com',
+                        password: 'testpass123'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ 认证API测试成功</h4>
+                            <p><strong>响应:</strong> ${JSON.stringify(data, null, 2)}</p>
+                        </div>
+                    `;
+                    log('认证API测试成功');
+                } else {
+                    const error = await response.json();
+                    resultDiv.innerHTML = `
+                        <div class="warning">
+                            <h4>⚠️ 认证API测试完成</h4>
+                            <p><strong>状态码:</strong> ${response.status}</p>
+                            <p><strong>响应:</strong> ${JSON.stringify(error, null, 2)}</p>
+                        </div>
+                    `;
+                    log(`认证API测试完成，状态码: ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ 认证API连接失败</h4>
+                        <p><strong>错误:</strong> ${error.message}</p>
+                    </div>
+                `;
+                log(`认证API连接失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 健康检查
+        async function testHealth() {
+            const resultDiv = document.getElementById('backend-result');
+            resultDiv.innerHTML = '<p><span class="loading"></span> 健康检查中...</p>';
+            log('开始健康检查');
+            
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <h4>✅ 健康检查通过</h4>
+                        <p><strong>状态:</strong> ${JSON.stringify(data, null, 2)}</p>
+                    </div>
+                `;
+                log('健康检查通过');
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ 健康检查失败</h4>
+                        <p><strong>错误:</strong> ${error.message}</p>
+                    </div>
+                `;
+                log(`健康检查失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 测试前端API调用
+        async function testFrontendAPI() {
+            const resultDiv = document.getElementById('frontend-result');
+            resultDiv.innerHTML = '<p><span class="loading"></span> 测试前端API调用...</p>';
+            log('开始测试前端API调用');
+            
+            try {
+                // 模拟前端API调用
+                const response = await fetch('http://localhost:8000/api/v1/auth/me', {
+                    headers: {
+                        'Authorization': 'Bearer invalid-token'
+                    }
+                });
+                
+                if (response.status === 401) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h4>✅ 前端API调用测试成功</h4>
+                            <p>认证拦截正常工作，返回401状态码</p>
+                        </div>
+                    `;
+                    log('前端API调用测试成功');
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="warning">
+                            <h4>⚠️ 前端API调用测试</h4>
+                            <p>返回状态码: ${response.status}</p>
+                        </div>
+                    `;
+                    log(`前端API调用测试，状态码: ${response.status}`);
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h4>❌ 前端API调用失败</h4>
+                        <p><strong>错误:</strong> ${error.message}</p>
+                    </div>
+                `;
+                log(`前端API调用失败: ${error.message}`, 'error');
+            }
+        }
+        
+        function openFrontend() {
+            window.open('http://localhost:3000', '_blank');
+            log('打开前端应用');
+        }
+        
+        function restartServices() {
+            const resultDiv = document.getElementById('troubleshoot-result');
+            resultDiv.innerHTML = `
+                <div class="info">
+                    <h4>🔄 重启服务指南</h4>
+                    <p><strong>后端重启:</strong> python start_backend.py</p>
+                    <p><strong>前端重启:</strong> cd frontend && npm run dev</p>
+                    <p><strong>一键重启:</strong> ./start_app.sh</p>
+                </div>
+            `;
+            log('显示重启服务指南');
+        }
+        
+        function checkLogs() {
+            const resultDiv = document.getElementById('troubleshoot-result');
+            resultDiv.innerHTML = `
+                <div class="info">
+                    <h4>📋 日志检查指南</h4>
+                    <p><strong>浏览器控制台:</strong> F12 → Console</p>
+                    <p><strong>网络请求:</strong> F12 → Network</p>
+                    <p><strong>后端日志:</strong> 查看终端输出</p>
+                    <p><strong>前端日志:</strong> 查看Vite开发服务器输出</p>
+                </div>
+            `;
+            log('显示日志检查指南');
+        }
+
+        function clearCache() {
+            const resultDiv = document.getElementById('troubleshoot-result');
+            resultDiv.innerHTML = `
+                <div class="info">
+                    <h4>🧹 清除缓存指南</h4>
+                    <p><strong>浏览器缓存:</strong> Ctrl+Shift+R (硬刷新)</p>
+                    <p><strong>清除所有缓存:</strong> F12 → Application → Storage → Clear storage</p>
+                    <p><strong>Vite缓存:</strong> 删除 frontend/node_modules/.vite 目录</p>
+                </div>
+            `;
+            log('显示清除缓存指南');
+        }
+        
+        // 页面加载时自动测试
+        window.onload = function() {
+            log('页面加载完成，开始自动测试');
+            updateStatusCard('frontend-status', 'success', '页面已加载');
+            
+            // 延迟测试后端，避免页面加载时的网络请求冲突
+            setTimeout(() => {
+                testBackend();
+                testHealth();
+            }, 1000);
+        };
+    </script>
+</body>
+</html> 
