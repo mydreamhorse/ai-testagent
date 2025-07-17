@@ -293,7 +293,7 @@ MIT License
 
 ## 联系方式
 
-- 项目维护者：汽车座椅测试团队
+- 项目维护者：mydreamhorse@gmail.com
 - 技术支持：请提交Issue到GitHub仓库
 
 ---
