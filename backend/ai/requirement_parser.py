@@ -1,6 +1,5 @@
 import re
 import jieba
-import spacy
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
@@ -25,13 +24,6 @@ class RequirementParser:
     def __init__(self):
         # Initialize Chinese word segmentation
         jieba.initialize()
-        
-        # Load spaCy model for English (if available)
-        try:
-            self.nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            logger.warning("English spaCy model not found. Install with: python -m spacy download en_core_web_sm")
-            self.nlp = None
         
         # Define seat function keywords
         self.seat_functions = {

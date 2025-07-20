@@ -14,7 +14,14 @@
       "Bash(chmod:*)",
       "Bash(./open_app.sh:*)",
       "Bash(true)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(black:*)",
+      "Bash(PYTHONPATH=/Users/robertma/src/mytestagent/backend python -c \"from ai.test_case_generator import TestCaseGenerator; generator = TestCaseGenerator(); print(''TestCaseGenerator instance created successfully'')\")",
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "Bash(PYTHONPATH=/Users/robertma/src/mytestagent python -c \"from backend.config import settings; print(''Settings loaded successfully''); print(f''AI model cache dir: {settings.ai_model_cache_dir}'')\")",
+      "Bash(kill:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

@@ -31,6 +31,10 @@
               <el-option label="性能测试" value="performance" />
               <el-option label="安全测试" value="security" />
             </el-select>
+            <el-button @click="loadTestCases" :loading="loading">
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
             <el-button @click="batchEvaluate" :disabled="selectedTestCases.length === 0" :loading="evaluating">
               批量评估
             </el-button>
@@ -141,10 +145,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Refresh } from '@element-plus/icons-vue'
 import api from '@/api'
 
 interface TestCase {
@@ -199,6 +203,27 @@ onMounted(() => {
   loadTestCases()
 })
 
+// Watch for route changes to refresh data
+watch(
+  () => route.query.requirement_id,
+  (newRequirementId) => {
+    if (newRequirementId) {
+      selectedRequirement.value = Number(newRequirementId)
+      loadTestCases()
+    }
+  }
+)
+
+// Watch for route changes to refresh data when navigating back to this page
+watch(
+  () => route.path,
+  (newPath) => {
+    if (newPath === '/test-cases') {
+      loadTestCases()
+    }
+  }
+)
+
 const loadRequirements = async () => {
   try {
     const response = await api.get('/api/v1/requirements/')
@@ -218,9 +243,17 @@ const loadTestCases = async () => {
     if (selectedType.value) {
       params.append('test_type', selectedType.value)
     }
+    
+    // Add sorting parameters - default sort by creation time descending
+    params.append('sort_by', 'created_at')
+    params.append('sort_order', 'desc')
+    
+    // Increase limit to get more test cases (including today's generated ones)
+    params.append('limit', '500')
 
     const response = await api.get(`/api/v1/test-cases/?${params}`)
-    testCases.value = response
+    // 在前端对数据进行排序，确保最新的排在最前面
+    testCases.value = response.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   } catch (error) {
     ElMessage.error('加载测试用例失败')
   } finally {

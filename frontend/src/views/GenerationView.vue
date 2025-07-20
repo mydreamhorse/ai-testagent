@@ -206,7 +206,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { InfoFilled } from '@element-plus/icons-vue'
 import api from '@/api'
 
@@ -346,6 +346,27 @@ const startGeneration = async () => {
     // Refresh data
     loadHistory()
     onRequirementChange(generationForm.value.requirement_id)
+    
+    // If test cases were generated, offer to navigate to test cases view
+    if (generationForm.value.generation_type === 'test_cases') {
+      ElMessageBox.confirm(
+        '测试用例生成成功！是否立即查看生成的测试用例？',
+        '生成完成',
+        {
+          confirmButtonText: '查看测试用例',
+          cancelButtonText: '稍后查看',
+          type: 'success'
+        }
+      ).then(() => {
+        // Navigate to test cases view with the current requirement filter
+        router.push({
+          name: 'TestCases',
+          query: { requirement_id: generationForm.value.requirement_id }
+        })
+      }).catch(() => {
+        // User chose to stay on current page
+      })
+    }
     
   } catch (error) {
     ElMessage.error('生成失败')

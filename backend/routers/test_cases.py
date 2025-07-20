@@ -32,7 +32,7 @@ async def create_test_case(
         raise HTTPException(status_code=404, detail="Requirement not found")
     
     db_test_case = TestCase(
-        **test_case.dict(),
+        **test_case.model_dump(),
         user_id=current_user.id,
         generated_by="human"
     )
@@ -46,6 +46,8 @@ async def create_test_case(
 async def read_test_cases(
     requirement_id: Optional[int] = None,
     test_type: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_order: Optional[str] = "desc",
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
@@ -59,7 +61,42 @@ async def read_test_cases(
     if test_type:
         query = query.filter(TestCase.test_type == test_type)
     
+    # Add sorting
+    if sort_by == "created_at":
+        if sort_order.lower() == "desc":
+            query = query.order_by(TestCase.created_at.desc())
+        else:
+            query = query.order_by(TestCase.created_at.asc())
+    elif sort_by == "id":
+        if sort_order.lower() == "desc":
+            query = query.order_by(TestCase.id.desc())
+        else:
+            query = query.order_by(TestCase.id.asc())
+    elif sort_by == "title":
+        if sort_order.lower() == "desc":
+            query = query.order_by(TestCase.title.desc())
+        else:
+            query = query.order_by(TestCase.title.asc())
+    else:
+        # Default sorting by created_at desc
+        query = query.order_by(TestCase.created_at.desc())
+    
+    # Add debug logging
+    logger.info(f"Current user ID: {current_user.id}")
+    logger.info(f"Sorting by: {sort_by}, order: {sort_order}")
+    logger.info(f"Query filters: requirement_id={requirement_id}, test_type={test_type}")
+    
+    # Log the raw SQL query
+    logger.info(f"Raw SQL: {query}")
+    
     test_cases = query.offset(skip).limit(limit).all()
+    
+    # Log the first few results for debugging
+    if test_cases:
+        logger.info(f"First 3 test cases: {[(tc.id, tc.title, tc.created_at) for tc in test_cases[:3]]}")
+    else:
+        logger.info("No test cases found")
+    
     return test_cases
 
 

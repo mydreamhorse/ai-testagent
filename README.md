@@ -69,13 +69,29 @@ User (用户)
 └── KnowledgeBase (知识库)
 ```
 
+## 项目规则
+
+本项目遵循以下规则和约定：
+
+### 📁 文件组织规则
+- **测试文件**：所有 `test_*.py` 文件都放在 `tests` 目录下，使用 pytest 框架编写
+- **文档文件**：所有 `*.md` 文件都放在 `docs` 目录下，除了 `README.md` 放在根目录
+
+详细规则请参考：[docs/PROJECT_RULES.md](docs/PROJECT_RULES.md)
+
 ## 项目结构
 
 ```
 mytestagent/
-├── PRD.md                    # 产品需求文档
-├── TODO.md                   # 开发任务清单
+├── README.md                 # 项目概述（根目录）
 ├── requirements.txt          # Python依赖
+├── docs/                     # 文档目录
+│   ├── PROJECT_RULES.md      # 项目规则
+│   ├── TESTING_GUIDE.md      # 测试指南
+│   ├── DEPLOYMENT.md         # 部署指南
+│   ├── PRD.md               # 产品需求文档
+│   ├── TODO.md              # 开发任务清单
+│   └── ...                  # 其他文档
 ├── backend/                  # 后端代码
 │   ├── main.py              # FastAPI应用入口
 │   ├── config.py            # 配置管理
@@ -106,9 +122,10 @@ mytestagent/
 │   │   ├── api/             # API调用
 │   │   └── types/           # 类型定义
 └── tests/                   # 测试代码
-    ├── simple_test.py       # 简化测试
-    ├── verify_core.py       # 核心功能验证
-    └── test_system.py       # 完整系统测试
+    ├── test_frontend_auth.py    # 前端认证测试
+    ├── test_sqlalchemy_query.py # 数据库查询测试
+    ├── test_fastapi_query.py    # FastAPI查询测试
+    └── ...                      # 其他测试文件
 ```
 
 ## 快速开始

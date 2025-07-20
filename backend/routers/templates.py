@@ -18,7 +18,7 @@ async def create_template(
     template: TestTemplateCreate,
     db: Session = Depends(get_db)
 ):
-    db_template = TestTemplate(**template.dict())
+    db_template = TestTemplate(**template.model_dump())
     db.add(db_template)
     db.commit()
     db.refresh(db_template)
@@ -65,7 +65,7 @@ async def update_template(
     if db_template is None:
         raise HTTPException(status_code=404, detail="Template not found")
     
-    for key, value in template.dict().items():
+    for key, value in template.model_dump().items():
         setattr(db_template, key, value)
     
     db.commit()

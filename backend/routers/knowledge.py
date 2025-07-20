@@ -18,7 +18,7 @@ async def create_knowledge(
     knowledge: KnowledgeBaseCreate,
     db: Session = Depends(get_db)
 ):
-    db_knowledge = KnowledgeBase(**knowledge.dict())
+    db_knowledge = KnowledgeBase(**knowledge.model_dump())
     db.add(db_knowledge)
     db.commit()
     db.refresh(db_knowledge)
@@ -81,7 +81,7 @@ async def update_knowledge(
     if db_knowledge is None:
         raise HTTPException(status_code=404, detail="Knowledge item not found")
     
-    for key, value in knowledge.dict().items():
+    for key, value in knowledge.model_dump().items():
         setattr(db_knowledge, key, value)
     
     db.commit()

@@ -26,7 +26,7 @@ async def create_requirement(
     db: Session = Depends(get_db)
 ):
     db_requirement = Requirement(
-        **requirement.dict(),
+        **requirement.model_dump(),
         user_id=current_user.id
     )
     db.add(db_requirement)

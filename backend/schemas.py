@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -47,8 +47,7 @@ class User(UserBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Requirement schemas
@@ -80,8 +79,7 @@ class Requirement(RequirementBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ParsedFeature schemas
@@ -104,8 +102,7 @@ class ParsedFeature(ParsedFeatureBase):
     requirement_id: int
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # TestCase schemas
@@ -145,8 +142,7 @@ class TestCase(TestCaseBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # TestCaseEvaluation schemas
@@ -171,8 +167,7 @@ class TestCaseEvaluation(TestCaseEvaluationBase):
     test_case_id: int
     evaluated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # TestTemplate schemas
@@ -195,8 +190,7 @@ class TestTemplate(TestTemplateBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # KnowledgeBase schemas
@@ -221,8 +215,7 @@ class KnowledgeBase(KnowledgeBaseBase):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # API Response schemas
