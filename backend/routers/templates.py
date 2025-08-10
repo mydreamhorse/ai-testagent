@@ -9,6 +9,7 @@ from ..schemas import (
     APIResponse
 )
 from ..routers.auth import get_current_active_user
+from ..models import User
 
 router = APIRouter()
 
@@ -16,6 +17,7 @@ router = APIRouter()
 @router.post("/", response_model=TestTemplateSchema)
 async def create_template(
     template: TestTemplateCreate,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     db_template = TestTemplate(**template.model_dump())
@@ -59,6 +61,7 @@ async def read_template(
 async def update_template(
     template_id: int,
     template: TestTemplateCreate,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     db_template = db.query(TestTemplate).filter(TestTemplate.id == template_id).first()
@@ -76,6 +79,7 @@ async def update_template(
 @router.delete("/{template_id}")
 async def delete_template(
     template_id: int,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     template = db.query(TestTemplate).filter(TestTemplate.id == template_id).first()

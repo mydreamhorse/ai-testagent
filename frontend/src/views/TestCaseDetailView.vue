@@ -294,7 +294,8 @@ const evaluateTestCase = async () => {
   try {
     const response = await api.post(`/api/v1/test-cases/${route.params.id}/evaluate`)
     ElMessage.success('评估完成')
-    evaluation.value = response.evaluation
+    // APIResponse 包装，数据在 data.evaluation
+    evaluation.value = response.data?.evaluation || response.evaluation
   } catch (error) {
     ElMessage.error('评估失败')
   } finally {

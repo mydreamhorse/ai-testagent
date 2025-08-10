@@ -6,7 +6,10 @@ from ..config import settings
 import logging
 import json
 import time
-from openai import OpenAI
+try:
+    from openai import OpenAI  # Optional dependency
+except Exception:
+    OpenAI = None  # Fallback when OpenAI SDK is not installed
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +27,8 @@ class TestCaseInfo:
 
 class TestCaseGenerator:
     def __init__(self):
-        # Initialize OpenAI client
-        if settings.openai_api_key:
+        # Initialize OpenAI client (optional)
+        if settings.openai_api_key and OpenAI is not None:
             try:
                 # Try to initialize with proxy settings and timeout
                 if hasattr(settings, "use_proxy") and not settings.use_proxy:
@@ -58,7 +61,7 @@ class TestCaseGenerator:
                 logger.error(f"Failed to initialize OpenAI client: {str(e)}")
                 self.client = None
         else:
-            logger.warning("OpenAI API key not found in settings")
+            logger.warning("OpenAI client not initialized (no API key or SDK not installed)")
             self.client = None
 
         # Test case types for systematic generation

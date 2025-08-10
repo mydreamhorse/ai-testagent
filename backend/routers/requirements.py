@@ -45,6 +45,19 @@ async def read_requirements(
     requirements = db.query(Requirement).filter(
         Requirement.user_id == current_user.id
     ).offset(skip).limit(limit).all()
+    # Seed a default requirement for the current user if none exist
+    if not requirements:
+        seed_requirement = Requirement(
+            title="示例需求",
+            description="这是为当前用户自动创建的示例需求，用于初始化数据。",
+            content="座椅应能够通过电动方式进行前后、上下、靠背角度调节。",
+            user_id=current_user.id,
+            status="pending",
+        )
+        db.add(seed_requirement)
+        db.commit()
+        db.refresh(seed_requirement)
+        requirements = [seed_requirement]
     return requirements
 
 
@@ -109,13 +122,6 @@ async def upload_requirement_file(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user)
 ):
-    # Check file size
-    if file.size > settings.max_file_size:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size is {settings.max_file_size} bytes"
-        )
-    
     # Check file type
     allowed_types = ['.txt', '.pdf', '.doc', '.docx']
     file_extension = os.path.splitext(file.filename)[1].lower()
@@ -130,14 +136,35 @@ async def upload_requirement_file(
     filename = f"{current_user.id}_{timestamp}_{file.filename}"
     file_path = os.path.join(settings.upload_dir, filename)
     
-    # Save file
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Save file with size limit enforcement
+    bytes_written = 0
+    try:
+        with open(file_path, "wb") as buffer:
+            chunk_size = 1024 * 1024  # 1MB
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                bytes_written += len(chunk)
+                if bytes_written > settings.max_file_size:
+                    # Remove partially written file
+                    buffer.close()
+                    try:
+                        os.remove(file_path)
+                    except Exception:
+                        pass
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large. Maximum size is {settings.max_file_size} bytes"
+                    )
+                buffer.write(chunk)
+    finally:
+        await file.close()
     
     return FileUploadResponse(
         filename=file.filename,
         file_path=file_path,
-        file_size=file.size,
+        file_size=bytes_written,
         file_type=file_extension,
         upload_time=datetime.utcnow()
     )

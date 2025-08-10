@@ -9,6 +9,7 @@ from ..schemas import (
     APIResponse
 )
 from ..routers.auth import get_current_active_user
+from ..models import User
 
 router = APIRouter()
 
@@ -16,6 +17,7 @@ router = APIRouter()
 @router.post("/", response_model=KnowledgeBaseSchema)
 async def create_knowledge(
     knowledge: KnowledgeBaseCreate,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     db_knowledge = KnowledgeBase(**knowledge.model_dump())
@@ -75,6 +77,7 @@ async def read_knowledge_item(
 async def update_knowledge(
     knowledge_id: int,
     knowledge: KnowledgeBaseCreate,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     db_knowledge = db.query(KnowledgeBase).filter(KnowledgeBase.id == knowledge_id).first()
@@ -92,6 +95,7 @@ async def update_knowledge(
 @router.delete("/{knowledge_id}")
 async def delete_knowledge(
     knowledge_id: int,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     knowledge = db.query(KnowledgeBase).filter(KnowledgeBase.id == knowledge_id).first()
