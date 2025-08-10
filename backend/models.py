@@ -17,8 +17,18 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    requirements = relationship("Requirement", back_populates="user")
-    test_cases = relationship("TestCase", back_populates="user")
+    requirements = relationship(
+        "Requirement",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    test_cases = relationship(
+        "TestCase",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Requirement(Base):
@@ -37,8 +47,18 @@ class Requirement(Base):
     
     # Relationships
     user = relationship("User", back_populates="requirements")
-    test_cases = relationship("TestCase", back_populates="requirement")
-    parsed_features = relationship("ParsedFeature", back_populates="requirement")
+    test_cases = relationship(
+        "TestCase",
+        back_populates="requirement",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    parsed_features = relationship(
+        "ParsedFeature",
+        back_populates="requirement",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class ParsedFeature(Base):
@@ -81,7 +101,12 @@ class TestCase(Base):
     # Relationships
     requirement = relationship("Requirement", back_populates="test_cases")
     user = relationship("User", back_populates="test_cases")
-    evaluations = relationship("TestCaseEvaluation", back_populates="test_case")
+    evaluations = relationship(
+        "TestCaseEvaluation",
+        back_populates="test_case",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class TestCaseEvaluation(Base):

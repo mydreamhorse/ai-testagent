@@ -8,6 +8,7 @@ from .database import engine, get_db
 from .models import Base
 from .config import settings
 from .routers import auth, requirements, test_cases, templates, knowledge, generation
+from .routers import analytics
 
 
 # Create tables
@@ -46,6 +47,7 @@ app.include_router(test_cases.router, prefix=f"{settings.api_prefix}/test-cases"
 app.include_router(templates.router, prefix=f"{settings.api_prefix}/templates", tags=["Templates"])
 app.include_router(knowledge.router, prefix=f"{settings.api_prefix}/knowledge", tags=["Knowledge Base"])
 app.include_router(generation.router, prefix=f"{settings.api_prefix}/generation", tags=["Generation"])
+app.include_router(analytics.router, prefix=f"{settings.api_prefix}/analytics", tags=["Analytics"])
 
 
 @app.get("/")

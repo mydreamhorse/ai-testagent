@@ -13,6 +13,7 @@ from ..schemas import (
 from ..routers.auth import get_current_active_user
 
 router = APIRouter()
+_TASK_STATUS: dict[str, dict] = {}
 logger = logging.getLogger(__name__)
 
 
@@ -65,6 +66,11 @@ async def generate_test_cases(
             ]
         }
         db.commit()
+        _TASK_STATUS[task_id] = {
+            "status": "completed",
+            "log_id": log.id,
+            "output": log.output_data,
+        }
         
         return GenerationResponse(
             task_id=task_id,
@@ -151,6 +157,11 @@ async def generate_evaluation(
             "evaluations": evaluation_results
         }
         db.commit()
+        _TASK_STATUS[task_id] = {
+            "status": "completed",
+            "log_id": log.id,
+            "output": log.output_data,
+        }
         
         return GenerationResponse(
             task_id=task_id,
@@ -178,18 +189,32 @@ async def get_generation_status(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    # TODO: Implement task status checking
-    # For now, return a placeholder response
-    return APIResponse(
-        success=True,
-        message="Task status retrieved",
-        data={
-            "task_id": task_id,
-            "status": "completed",
-            "progress": 100,
-            "result": "Task completed successfully"
-        }
-    )
+    status = _TASK_STATUS.get(task_id)
+    if status:
+        return APIResponse(
+            success=True,
+            message="Task status retrieved",
+            data={
+                "task_id": task_id,
+                "status": status["status"],
+                "log_id": status["log_id"],
+                "output": status.get("output")
+            }
+        )
+
+    # Fallback: try to locate by latest log entry for this user
+    log = db.query(GenerationLog).filter(GenerationLog.user_id == current_user.id).order_by(GenerationLog.created_at.desc()).first()
+    if log:
+        return APIResponse(
+            success=True,
+            message="Latest generation log returned",
+            data={
+                "task_id": task_id,
+                "status": log.status,
+                "log_id": log.id,
+            }
+        )
+    raise HTTPException(status_code=404, detail="Task not found")
 
 
 @router.get("/history", response_model=List[dict])
