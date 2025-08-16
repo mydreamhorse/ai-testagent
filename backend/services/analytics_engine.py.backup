@@ -1,0 +1,1229 @@
+"""
+Analytics Engine Service
+
+This module implements the core analytics and intelligent suggestion functionality
+for the intelligent test reporting system. It provides statistical analysis,
+data aggregation, and intelligent recommendations.
+"""
+
+from typing import List, Dict, Any, Optional, Union, Tuple
+from datetime import datetime, timedelta
+from enum import Enum
+import json
+import logging
+import statistics
+from dataclasses import dataclass, asdict
+from collections import defaultdict, Counter
+
+from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, or_, desc
+
+from backend.models import (
+    TestCase, Requirement, Defect, CoverageAnalysis, TestCaseEvaluation,
+    User, SystemMetric, Report, AlertRule, Alert
+)
+
+logger = logging.getLogger(__name__)
+
+
+class AnalysisType(Enum):
+    """Types of analysis that can be performed"""
+    STATISTICAL = "statistical"
+    TREND = "trend"
+    CORRELATION = "correlation"
+    PREDICTION = "prediction"
+
+
+class MetricType(Enum):
+    """Types of metrics for analysis"""
+    COVERAGE_RATE = "coverage_rate"
+    DEFECT_RATE = "defect_rate"
+    PASS_RATE = "pass_rate"
+    EXECUTION_TIME = "execution_time"
+    QUALITY_SCORE = "quality_score"
+
+
+@dataclass
+class StatisticalSummary:
+    """Statistical summary of a dataset"""
+    count: int
+    mean: float
+    median: float
+    std_dev: float
+    min_value: float
+    max_value: float
+    percentile_25: float
+    percentile_75: float
+
+
+@dataclass
+class TrendAnalysis:
+    """Trend analysis results"""
+    trend_direction: str  # 'increasing', 'decreasing', 'stable'
+    trend_strength: float  # 0.0 to 1.0
+    slope: float
+    r_squared: float
+    data_points: int
+    confidence: float
+
+
+@dataclass
+class CorrelationResult:
+    """Correlation analysis result"""
+    correlation_coefficient: float
+    p_value: float
+    significance: str  # 'strong', 'moderate', 'weak', 'none'
+    sample_size: int
+
+
+class StatisticalAnalyzer:
+    """Performs statistical analysis on test data"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def calculate_basic_statistics(self, values: List[float]) -> StatisticalSummary:
+        """Calculate basic statistical measures for a dataset"""
+        if not values:
+            return StatisticalSummary(0, 0, 0, 0, 0, 0, 0, 0)
+        
+        try:
+            count = len(values)
+            mean = statistics.mean(values)
+            median = statistics.median(values)
+            std_dev = statistics.stdev(values) if count > 1 else 0
+            min_value = min(values)
+            max_value = max(values)
+            
+            # Calculate percentiles
+            sorted_values = sorted(values)
+            percentile_25 = self._calculate_percentile(sorted_values, 25)
+            percentile_75 = self._calculate_percentile(sorted_values, 75)
+            
+            return StatisticalSummary(
+                count=count,
+                mean=mean,
+                median=median,
+                std_dev=std_dev,
+                min_value=min_value,
+                max_value=max_value,
+                percentile_25=percentile_25,
+                percentile_75=percentile_75
+            )
+        except Exception as e:
+            logger.error(f"Error calculating statistics: {str(e)}")
+            return StatisticalSummary(0, 0, 0, 0, 0, 0, 0, 0)
+    
+    def _calculate_percentile(self, sorted_values: List[float], percentile: int) -> float:
+        """Calculate percentile value from sorted data"""
+        if not sorted_values:
+            return 0
+        
+        index = (percentile / 100) * (len(sorted_values) - 1)
+        if index.is_integer():
+            return sorted_values[int(index)]
+        else:
+            lower_index = int(index)
+            upper_index = lower_index + 1
+            if upper_index >= len(sorted_values):
+                return sorted_values[lower_index]
+            
+            weight = index - lower_index
+            return sorted_values[lower_index] * (1 - weight) + sorted_values[upper_index] * weight
+    
+    def analyze_metric_distribution(self, metric_type: MetricType, 
+                                  date_range: Optional[Tuple[datetime, datetime]] = None) -> Dict[str, Any]:
+        """Analyze distribution of a specific metric"""
+        try:
+            values = self._collect_metric_values(metric_type, date_range)
+            
+            if not values:
+                return {
+                    'metric_type': metric_type.value,
+                    'statistics': asdict(StatisticalSummary(0, 0, 0, 0, 0, 0, 0, 0)),
+                    'distribution': {},
+                    'outliers': [],
+                    'analysis_time': datetime.utcnow()
+                }
+            
+            # Calculate basic statistics
+            stats = self.calculate_basic_statistics(values)
+            
+            # Detect outliers using IQR method
+            outliers = self._detect_outliers(values, stats.percentile_25, stats.percentile_75)
+            
+            # Create distribution histogram
+            distribution = self._create_distribution_histogram(values)
+            
+            return {
+                'metric_type': metric_type.value,
+                'statistics': asdict(stats),
+                'distribution': distribution,
+                'outliers': outliers,
+                'analysis_time': datetime.utcnow()
+            }
+        except Exception as e:
+            logger.error(f"Error analyzing metric distribution: {str(e)}")
+            return {
+                'metric_type': metric_type.value,
+                'error': str(e),
+                'analysis_time': datetime.utcnow()
+            }
+    
+    def _collect_metric_values(self, metric_type: MetricType, 
+                              date_range: Optional[Tuple[datetime, datetime]] = None) -> List[float]:
+        """Collect metric values from database"""
+        values = []
+        
+        try:
+            if metric_type == MetricType.COVERAGE_RATE:
+                query = self.db.query(CoverageAnalysis.coverage_percentage)
+                if date_range:
+                    query = query.filter(
+                        CoverageAnalysis.analysis_date >= date_range[0],
+                        CoverageAnalysis.analysis_date <= date_range[1]
+                    )
+                values = [row[0] for row in query.all() if row[0] is not None]
+                
+            elif metric_type == MetricType.DEFECT_RATE:
+                # Calculate defect rate as defects per test case
+                query = self.db.query(
+                    func.count(Defect.id).label('defect_count'),
+                    func.count(TestCase.id).label('test_count')
+                ).join(TestCase, Defect.test_case_id == TestCase.id)
+                
+                if date_range:
+                    query = query.filter(
+                        Defect.detected_at >= date_range[0],
+                        Defect.detected_at <= date_range[1]
+                    )
+                
+                result = query.first()
+                if result and result.test_count > 0:
+                    values = [result.defect_count / result.test_count]
+                    
+            elif metric_type == MetricType.QUALITY_SCORE:
+                query = self.db.query(TestCaseEvaluation.total_score)
+                if date_range:
+                    query = query.filter(
+                        TestCaseEvaluation.evaluated_at >= date_range[0],
+                        TestCaseEvaluation.evaluated_at <= date_range[1]
+                    )
+                values = [row[0] for row in query.all() if row[0] is not None]
+                
+        except Exception as e:
+            logger.error(f"Error collecting metric values: {str(e)}")
+            
+        return values
+    
+    def _detect_outliers(self, values: List[float], q1: float, q3: float) -> List[float]:
+        """Detect outliers using IQR method"""
+        if not values or q1 == q3:
+            return []
+        
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        return [v for v in values if v < lower_bound or v > upper_bound]
+    
+    def _create_distribution_histogram(self, values: List[float], bins: int = 10) -> Dict[str, Any]:
+        """Create histogram distribution of values"""
+        if not values:
+            return {}
+        
+        min_val, max_val = min(values), max(values)
+        if min_val == max_val:
+            return {str(min_val): len(values)}
+        
+        bin_width = (max_val - min_val) / bins
+        histogram = {}
+        
+        for i in range(bins):
+            bin_start = min_val + i * bin_width
+            bin_end = bin_start + bin_width
+            bin_label = f"{bin_start:.2f}-{bin_end:.2f}"
+            
+            count = sum(1 for v in values if bin_start <= v < bin_end)
+            if i == bins - 1:  # Include max value in last bin
+                count = sum(1 for v in values if bin_start <= v <= bin_end)
+            
+            histogram[bin_label] = count
+        
+        return histogram
+
+
+class AnalyticsEngine:
+    """Main analytics engine for intelligent test reporting"""
+    
+    def __init__(self, db: Session = None):
+        self.db = db
+        self.statistical_analyzer = StatisticalAnalyzer(db) if db else None
+    
+    async def query_analytics(self, metric_types: Optional[List[str]] = None,
+                            start_date: Optional[datetime] = None,
+                            end_date: Optional[datetime] = None,
+                            group_by: Optional[str] = None,
+                            aggregation: str = "avg") -> Dict[str, Any]:
+        """Query analytics data with flexible parameters"""
+        try:
+            if not self.db:
+                return {"error": "Database connection not available"}
+            
+            # Set default date range if not provided
+            if not start_date:
+                start_date = datetime.utcnow() - timedelta(days=30)
+            if not end_date:
+                end_date = datetime.utcnow()
+            
+            results = {}
+            
+            # Query system metrics if available
+            if metric_types:
+                for metric_type in metric_types:
+                    metric_data = await self._query_metric_data(
+                        metric_type, start_date, end_date, group_by, aggregation
+                    )
+                    results[metric_type] = metric_data
+            else:
+                # Query all available metrics
+                all_metrics = await self._query_all_metrics(start_date, end_date, group_by, aggregation)
+                results.update(all_metrics)
+            
+            return {
+                "analytics_result": results,
+                "query_parameters": {
+                    "metric_types": metric_types,
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                    "group_by": group_by,
+                    "aggregation": aggregation
+                },
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in analytics query: {str(e)}")
+            return {"error": str(e)}
+    
+    async def _query_metric_data(self, metric_type: str, start_date: datetime,
+                               end_date: datetime, group_by: Optional[str],
+                               aggregation: str) -> Dict[str, Any]:
+        """Query data for a specific metric type"""
+        try:
+            # Query from SystemMetric table
+            query = self.db.query(SystemMetric).filter(
+                SystemMetric.metric_type == metric_type,
+                SystemMetric.recorded_at >= start_date,
+                SystemMetric.recorded_at <= end_date
+            )
+            
+            metrics = query.all()
+            
+            if not metrics:
+                return {"data": [], "summary": {"count": 0}}
+            
+            # Group and aggregate data
+            if group_by:
+                grouped_data = self._group_metrics_by_time(metrics, group_by)
+                aggregated_data = self._aggregate_grouped_data(grouped_data, aggregation)
+            else:
+                values = [m.metric_value for m in metrics]
+                aggregated_data = self._apply_aggregation(values, aggregation)
+            
+            return {
+                "data": aggregated_data,
+                "summary": {
+                    "count": len(metrics),
+                    "metric_type": metric_type,
+                    "aggregation": aggregation
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error querying metric data: {str(e)}")
+            return {"error": str(e)}
+    
+    async def _query_all_metrics(self, start_date: datetime, end_date: datetime,
+                               group_by: Optional[str], aggregation: str) -> Dict[str, Any]:
+        """Query all available metrics"""
+        try:
+            # Get distinct metric types
+            metric_types = self.db.query(SystemMetric.metric_type).distinct().all()
+            metric_types = [mt[0] for mt in metric_types]
+            
+            results = {}
+            for metric_type in metric_types:
+                metric_data = await self._query_metric_data(
+                    metric_type, start_date, end_date, group_by, aggregation
+                )
+                results[metric_type] = metric_data
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error querying all metrics: {str(e)}")
+            return {"error": str(e)}
+    
+    def _group_metrics_by_time(self, metrics: List, group_by: str) -> Dict[str, List]:
+        """Group metrics by time period"""
+        grouped = defaultdict(list)
+        
+        for metric in metrics:
+            if group_by == "hour":
+                key = metric.recorded_at.strftime("%Y-%m-%d %H:00")
+            elif group_by == "day":
+                key = metric.recorded_at.strftime("%Y-%m-%d")
+            elif group_by == "week":
+                # Get Monday of the week
+                monday = metric.recorded_at - timedelta(days=metric.recorded_at.weekday())
+                key = monday.strftime("%Y-%m-%d")
+            elif group_by == "month":
+                key = metric.recorded_at.strftime("%Y-%m")
+            else:
+                key = "all"
+            
+            grouped[key].append(metric.metric_value)
+        
+        return dict(grouped)
+    
+    def _aggregate_grouped_data(self, grouped_data: Dict[str, List], aggregation: str) -> List[Dict]:
+        """Apply aggregation to grouped data"""
+        result = []
+        
+        for time_key, values in grouped_data.items():
+            aggregated_value = self._apply_aggregation(values, aggregation)
+            result.append({
+                "time_period": time_key,
+                "value": aggregated_value,
+                "count": len(values)
+            })
+        
+        # Sort by time period
+        result.sort(key=lambda x: x["time_period"])
+        return result
+    
+    def _apply_aggregation(self, values: List[float], aggregation: str) -> float:
+        """Apply aggregation function to values"""
+        if not values:
+            return 0.0
+        
+        if aggregation == "avg":
+            return sum(values) / len(values)
+        elif aggregation == "sum":
+            return sum(values)
+        elif aggregation == "min":
+            return min(values)
+        elif aggregation == "max":
+            return max(values)
+        elif aggregation == "count":
+            return len(values)
+        else:
+            return sum(values) / len(values)  # Default to average
+    
+    async def analyze_coverage_trends(self, coverage_data: List) -> Dict[str, Any]:
+        """Analyze coverage trends over time"""
+        try:
+            if not coverage_data:
+                return {"error": "No coverage data available"}
+            
+            # Extract coverage percentages and dates
+            data_points = []
+            for coverage in coverage_data:
+                data_points.append({
+                    "date": coverage.analysis_date,
+                    "coverage": coverage.coverage_percentage,
+                    "module": coverage.function_module
+                })
+            
+            # Sort by date
+            data_points.sort(key=lambda x: x["date"])
+            
+            # Calculate overall trend
+            coverage_values = [dp["coverage"] for dp in data_points]
+            trend_analysis = self._calculate_trend(coverage_values)
+            
+            # Group by module
+            module_trends = defaultdict(list)
+            for dp in data_points:
+                module_trends[dp["module"]].append(dp["coverage"])
+            
+            module_analysis = {}
+            for module, values in module_trends.items():
+                module_analysis[module] = {
+                    "trend": self._calculate_trend(values),
+                    "current_coverage": values[-1] if values else 0,
+                    "average_coverage": sum(values) / len(values) if values else 0
+                }
+            
+            return {
+                "coverage_analysis": {
+                    "overall_trend": trend_analysis,
+                    "module_analysis": module_analysis,
+                    "data_points": data_points,
+                    "summary": {
+                        "total_modules": len(module_trends),
+                        "average_coverage": sum(coverage_values) / len(coverage_values) if coverage_values else 0,
+                        "coverage_range": {
+                            "min": min(coverage_values) if coverage_values else 0,
+                            "max": max(coverage_values) if coverage_values else 0
+                        }
+                    }
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing coverage trends: {str(e)}")
+            return {"error": str(e)}
+    
+    async def analyze_defect_patterns(self, defects: List) -> Dict[str, Any]:
+        """Analyze defect patterns and trends"""
+        try:
+            if not defects:
+                return {"error": "No defect data available"}
+            
+            # Analyze defect types
+            defect_types = Counter([d.defect_type for d in defects])
+            severity_distribution = Counter([d.severity for d in defects])
+            status_distribution = Counter([d.status for d in defects])
+            
+            # Analyze defect trends over time
+            defect_timeline = []
+            for defect in defects:
+                defect_timeline.append({
+                    "date": defect.detected_at,
+                    "type": defect.defect_type,
+                    "severity": defect.severity,
+                    "status": defect.status
+                })
+            
+            defect_timeline.sort(key=lambda x: x["date"])
+            
+            # Calculate resolution time for resolved defects
+            resolution_times = []
+            for defect in defects:
+                if defect.resolved_at and defect.detected_at:
+                    resolution_time = (defect.resolved_at - defect.detected_at).total_seconds() / 3600  # hours
+                    resolution_times.append(resolution_time)
+            
+            avg_resolution_time = sum(resolution_times) / len(resolution_times) if resolution_times else 0
+            
+            return {
+                "defect_analysis": {
+                    "type_distribution": dict(defect_types),
+                    "severity_distribution": dict(severity_distribution),
+                    "status_distribution": dict(status_distribution),
+                    "timeline": defect_timeline,
+                    "resolution_metrics": {
+                        "average_resolution_time_hours": avg_resolution_time,
+                        "resolved_count": len(resolution_times),
+                        "total_count": len(defects)
+                    },
+                    "summary": {
+                        "total_defects": len(defects),
+                        "most_common_type": defect_types.most_common(1)[0] if defect_types else None,
+                        "most_common_severity": severity_distribution.most_common(1)[0] if severity_distribution else None
+                    }
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing defect patterns: {str(e)}")
+            return {"error": str(e)}
+    
+    def _calculate_trend(self, values: List[float]) -> Dict[str, Any]:
+        """Calculate trend direction and strength"""
+        if len(values) < 2:
+            return {"direction": "stable", "strength": 0.0, "confidence": 0.0}
+        
+        try:
+            # Simple linear regression to determine trend
+            n = len(values)
+            x = list(range(n))
+            
+            # Calculate slope
+            x_mean = sum(x) / n
+            y_mean = sum(values) / n
+            
+            numerator = sum((x[i] - x_mean) * (values[i] - y_mean) for i in range(n))
+            denominator = sum((x[i] - x_mean) ** 2 for i in range(n))
+            
+            if denominator == 0:
+                slope = 0
+            else:
+                slope = numerator / denominator
+            
+            # Determine trend direction
+            if abs(slope) < 0.1:
+                direction = "stable"
+            elif slope > 0:
+                direction = "increasing"
+            else:
+                direction = "decreasing"
+            
+            # Calculate strength (normalized absolute slope)
+            max_value = max(values)
+            min_value = min(values)
+            value_range = max_value - min_value
+            
+            if value_range == 0:
+                strength = 0.0
+            else:
+                strength = min(abs(slope) / value_range * n, 1.0)
+            
+            return {
+                "direction": direction,
+                "strength": strength,
+                "slope": slope,
+                "confidence": min(strength * 2, 1.0)  # Simple confidence measure
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calculating trend: {str(e)}")
+            return {"direction": "unknown", "strength": 0.0, "confidence": 0.0}
+            
+            # Identify outliers using IQR method
+            outliers = self._identify_outliers(values, stats.percentile_25, stats.percentile_75)
+            
+            # Create distribution bins
+            distribution = self._create_distribution_bins(values)
+            
+            return {
+                'metric_type': metric_type.value,
+                'statistics': asdict(stats),
+                'distribution': distribution,
+                'outliers': outliers,
+                'analysis_time': datetime.utcnow()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing metric distribution: {str(e)}")
+            raise
+    
+    def _collect_metric_values(self, metric_type: MetricType, 
+                             date_range: Optional[Tuple[datetime, datetime]]) -> List[float]:
+        """Collect metric values from database"""
+        values = []
+        
+        try:
+            if metric_type == MetricType.COVERAGE_RATE:
+                query = self.db.query(CoverageAnalysis.coverage_percentage)
+                if date_range:
+                    query = query.filter(
+                        and_(
+                            CoverageAnalysis.analysis_date >= date_range[0],
+                            CoverageAnalysis.analysis_date <= date_range[1]
+                        )
+                    )
+                values = [row[0] for row in query.all() if row[0] is not None]
+                
+            elif metric_type == MetricType.DEFECT_RATE:
+                # Calculate defect rate per test case
+                query = self.db.query(
+                    TestCase.id,
+                    func.count(Defect.id).label('defect_count')
+                ).outerjoin(Defect).group_by(TestCase.id)
+                
+                if date_range:
+                    query = query.filter(
+                        and_(
+                            TestCase.created_at >= date_range[0],
+                            TestCase.created_at <= date_range[1]
+                        )
+                    )
+                
+                results = query.all()
+                values = [float(row.defect_count) for row in results]
+                
+            elif metric_type == MetricType.PASS_RATE:
+                # Calculate pass rate based on evaluation scores
+                query = self.db.query(TestCaseEvaluation.total_score)
+                if date_range:
+                    query = query.filter(
+                        and_(
+                            TestCaseEvaluation.evaluated_at >= date_range[0],
+                            TestCaseEvaluation.evaluated_at <= date_range[1]
+                        )
+                    )
+                
+                scores = [row[0] for row in query.all() if row[0] is not None]
+                # Convert scores to pass/fail (70% threshold) then to rates
+                pass_rates = [100.0 if score >= 70 else 0.0 for score in scores]
+                values = pass_rates
+                
+            elif metric_type == MetricType.QUALITY_SCORE:
+                query = self.db.query(TestCaseEvaluation.total_score)
+                if date_range:
+                    query = query.filter(
+                        and_(
+                            TestCaseEvaluation.evaluated_at >= date_range[0],
+                            TestCaseEvaluation.evaluated_at <= date_range[1]
+                        )
+                    )
+                values = [row[0] for row in query.all() if row[0] is not None]
+                
+        except Exception as e:
+            logger.error(f"Error collecting metric values for {metric_type}: {str(e)}")
+            
+        return values
+    
+    def _identify_outliers(self, values: List[float], q1: float, q3: float) -> List[Dict[str, Any]]:
+        """Identify outliers using IQR method"""
+        if not values or q1 == q3:
+            return []
+        
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        outliers = []
+        for i, value in enumerate(values):
+            if value < lower_bound or value > upper_bound:
+                outliers.append({
+                    'index': i,
+                    'value': value,
+                    'type': 'low' if value < lower_bound else 'high',
+                    'deviation': abs(value - (q1 + q3) / 2)
+                })
+        
+        return sorted(outliers, key=lambda x: x['deviation'], reverse=True)
+    
+    def _create_distribution_bins(self, values: List[float], num_bins: int = 10) -> Dict[str, Any]:
+        """Create distribution bins for histogram"""
+        if not values:
+            return {'bins': [], 'counts': [], 'bin_edges': []}
+        
+        min_val = min(values)
+        max_val = max(values)
+        
+        if min_val == max_val:
+            return {
+                'bins': [f"{min_val:.2f}"],
+                'counts': [len(values)],
+                'bin_edges': [min_val, max_val]
+            }
+        
+        bin_width = (max_val - min_val) / num_bins
+        bin_edges = [min_val + i * bin_width for i in range(num_bins + 1)]
+        bin_counts = [0] * num_bins
+        
+        for value in values:
+            bin_index = min(int((value - min_val) / bin_width), num_bins - 1)
+            bin_counts[bin_index] += 1
+        
+        bin_labels = [
+            f"{bin_edges[i]:.2f}-{bin_edges[i+1]:.2f}"
+            for i in range(num_bins)
+        ]
+        
+        return {
+            'bins': bin_labels,
+            'counts': bin_counts,
+            'bin_edges': bin_edges
+        }
+    
+    def perform_correlation_analysis(self, metric1: MetricType, metric2: MetricType,
+                                   date_range: Optional[Tuple[datetime, datetime]] = None) -> CorrelationResult:
+        """Perform correlation analysis between two metrics"""
+        try:
+            values1 = self._collect_metric_values(metric1, date_range)
+            values2 = self._collect_metric_values(metric2, date_range)
+            
+            # Ensure same length by taking minimum
+            min_length = min(len(values1), len(values2))
+            if min_length < 2:
+                return CorrelationResult(0.0, 1.0, 'none', min_length)
+            
+            values1 = values1[:min_length]
+            values2 = values2[:min_length]
+            
+            # Calculate Pearson correlation coefficient
+            correlation = self._calculate_pearson_correlation(values1, values2)
+            
+            # Simple p-value estimation (for demonstration)
+            p_value = self._estimate_p_value(correlation, min_length)
+            
+            # Determine significance
+            significance = self._determine_significance(abs(correlation))
+            
+            return CorrelationResult(
+                correlation_coefficient=correlation,
+                p_value=p_value,
+                significance=significance,
+                sample_size=min_length
+            )
+            
+        except Exception as e:
+            logger.error(f"Error performing correlation analysis: {str(e)}")
+            return CorrelationResult(0.0, 1.0, 'none', 0)
+    
+    def _calculate_pearson_correlation(self, x: List[float], y: List[float]) -> float:
+        """Calculate Pearson correlation coefficient"""
+        if len(x) != len(y) or len(x) < 2:
+            return 0.0
+        
+        n = len(x)
+        sum_x = sum(x)
+        sum_y = sum(y)
+        sum_xy = sum(x[i] * y[i] for i in range(n))
+        sum_x2 = sum(xi * xi for xi in x)
+        sum_y2 = sum(yi * yi for yi in y)
+        
+        numerator = n * sum_xy - sum_x * sum_y
+        denominator = ((n * sum_x2 - sum_x * sum_x) * (n * sum_y2 - sum_y * sum_y)) ** 0.5
+        
+        if denominator == 0:
+            return 0.0
+        
+        return numerator / denominator
+    
+    def _estimate_p_value(self, correlation: float, sample_size: int) -> float:
+        """Estimate p-value for correlation (simplified)"""
+        if sample_size < 3:
+            return 1.0
+        
+        # Handle perfect correlation case
+        if abs(correlation) >= 0.999:
+            return 0.001  # Very low p-value for perfect correlation
+        
+        # Simplified p-value estimation
+        t_stat = abs(correlation) * ((sample_size - 2) / (1 - correlation * correlation)) ** 0.5
+        
+        # Very rough p-value estimation
+        if t_stat > 2.576:  # 99% confidence
+            return 0.01
+        elif t_stat > 1.96:  # 95% confidence
+            return 0.05
+        elif t_stat > 1.645:  # 90% confidence
+            return 0.10
+        else:
+            return 0.20
+    
+    def _determine_significance(self, abs_correlation: float) -> str:
+        """Determine correlation significance level"""
+        if abs_correlation >= 0.7:
+            return 'strong'
+        elif abs_correlation >= 0.5:
+            return 'moderate'
+        elif abs_correlation >= 0.3:
+            return 'weak'
+        else:
+            return 'none'
+
+
+class DataAggregator:
+    """Aggregates and groups data for analysis"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def aggregate_by_time_period(self, metric_type: MetricType, 
+                               period: str = 'daily',
+                               date_range: Optional[Tuple[datetime, datetime]] = None) -> Dict[str, Any]:
+        """Aggregate metrics by time period"""
+        try:
+            # Determine time grouping function
+            if period == 'daily':
+                time_format = '%Y-%m-%d'
+                group_func = func.date
+            elif period == 'weekly':
+                time_format = '%Y-W%U'
+                group_func = func.strftime('%Y-W%U')
+            elif period == 'monthly':
+                time_format = '%Y-%m'
+                group_func = func.strftime('%Y-%m')
+            else:
+                raise ValueError(f"Unsupported period: {period}")
+            
+            aggregated_data = self._collect_aggregated_data(metric_type, group_func, date_range)
+            
+            return {
+                'metric_type': metric_type.value,
+                'period': period,
+                'data': aggregated_data,
+                'aggregation_time': datetime.utcnow()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error aggregating data by time period: {str(e)}")
+            raise
+    
+    def _collect_aggregated_data(self, metric_type: MetricType, group_func, 
+                               date_range: Optional[Tuple[datetime, datetime]]) -> List[Dict[str, Any]]:
+        """Collect aggregated data based on metric type"""
+        aggregated_data = []
+        
+        try:
+            if metric_type == MetricType.COVERAGE_RATE:
+                query = self.db.query(
+                    group_func(CoverageAnalysis.analysis_date).label('period'),
+                    func.avg(CoverageAnalysis.coverage_percentage).label('avg_value'),
+                    func.count(CoverageAnalysis.id).label('count')
+                ).group_by('period')
+                
+                if date_range:
+                    query = query.filter(
+                        and_(
+                            CoverageAnalysis.analysis_date >= date_range[0],
+                            CoverageAnalysis.analysis_date <= date_range[1]
+                        )
+                    )
+                
+                results = query.all()
+                aggregated_data = [
+                    {
+                        'period': str(row.period),
+                        'average': float(row.avg_value) if row.avg_value else 0,
+                        'count': row.count
+                    }
+                    for row in results
+                ]
+                
+            elif metric_type == MetricType.QUALITY_SCORE:
+                query = self.db.query(
+                    group_func(TestCaseEvaluation.evaluated_at).label('period'),
+                    func.avg(TestCaseEvaluation.total_score).label('avg_score'),
+                    func.count(TestCaseEvaluation.id).label('count')
+                ).group_by('period')
+                
+                if date_range:
+                    query = query.filter(
+                        and_(
+                            TestCaseEvaluation.evaluated_at >= date_range[0],
+                            TestCaseEvaluation.evaluated_at <= date_range[1]
+                        )
+                    )
+                
+                results = query.all()
+                aggregated_data = [
+                    {
+                        'period': str(row.period),
+                        'average': float(row.avg_score) if row.avg_score else 0,
+                        'count': row.count
+                    }
+                    for row in results
+                ]
+                
+        except Exception as e:
+            logger.error(f"Error collecting aggregated data: {str(e)}")
+            
+        return aggregated_data
+    
+    def group_by_category(self, metric_type: MetricType, 
+                         category_field: str) -> Dict[str, Any]:
+        """Group metrics by category"""
+        try:
+            grouped_data = {}
+            
+            if metric_type == MetricType.DEFECT_RATE and category_field == 'severity':
+                query = self.db.query(
+                    Defect.severity,
+                    func.count(Defect.id).label('count')
+                ).group_by(Defect.severity)
+                
+                results = query.all()
+                grouped_data = {
+                    row.severity: row.count
+                    for row in results
+                }
+                
+            elif metric_type == MetricType.DEFECT_RATE and category_field == 'type':
+                query = self.db.query(
+                    Defect.defect_type,
+                    func.count(Defect.id).label('count')
+                ).group_by(Defect.defect_type)
+                
+                results = query.all()
+                grouped_data = {
+                    row.defect_type: row.count
+                    for row in results
+                }
+                
+            elif metric_type == MetricType.QUALITY_SCORE and category_field == 'test_type':
+                query = self.db.query(
+                    TestCase.test_type,
+                    func.avg(TestCaseEvaluation.total_score).label('avg_score')
+                ).join(TestCaseEvaluation).group_by(TestCase.test_type)
+                
+                results = query.all()
+                grouped_data = {
+                    row.test_type: float(row.avg_score) if row.avg_score else 0
+                    for row in results
+                }
+            
+            return {
+                'metric_type': metric_type.value,
+                'category_field': category_field,
+                'grouped_data': grouped_data,
+                'aggregation_time': datetime.utcnow()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error grouping by category: {str(e)}")
+            raise
+
+
+class AnalyticsEngine:
+    """Main analytics engine that coordinates all analysis components"""
+    
+    def __init__(self, db: Session):
+        self.db = db
+        self.statistical_analyzer = StatisticalAnalyzer(db)
+        self.data_aggregator = DataAggregator(db)
+    
+    def analyze_test_coverage(self, requirements: List[Requirement], 
+                            test_cases: List[TestCase]) -> Dict[str, Any]:
+        """Analyze test coverage with statistical insights"""
+        try:
+            # Basic coverage calculation
+            coverage_map = {}
+            coverage_percentages = []
+            
+            for requirement in requirements:
+                covering_test_cases = [tc for tc in test_cases if tc.requirement_id == requirement.id]
+                
+                # Calculate coverage percentage
+                if covering_test_cases:
+                    test_types = set(tc.test_type for tc in covering_test_cases if tc.test_type)
+                    base_coverage = min(100, len(covering_test_cases) * 20)
+                    type_bonus = len(test_types) * 5
+                    coverage_percentage = min(100, base_coverage + type_bonus)
+                else:
+                    coverage_percentage = 0
+                
+                coverage_map[requirement.id] = {
+                    'requirement_id': requirement.id,
+                    'requirement_title': requirement.title,
+                    'coverage_percentage': coverage_percentage,
+                    'test_count': len(covering_test_cases)
+                }
+                coverage_percentages.append(coverage_percentage)
+            
+            # Statistical analysis of coverage
+            coverage_stats = self.statistical_analyzer.calculate_basic_statistics(coverage_percentages)
+            
+            # Identify coverage gaps
+            coverage_gaps = [
+                info for info in coverage_map.values()
+                if info['coverage_percentage'] < 60
+            ]
+            
+            return {
+                'coverage_map': coverage_map,
+                'coverage_statistics': asdict(coverage_stats),
+                'coverage_gaps': coverage_gaps,
+                'total_requirements': len(requirements),
+                'covered_requirements': sum(1 for p in coverage_percentages if p > 0),
+                'average_coverage': coverage_stats.mean,
+                'analysis_time': datetime.utcnow()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing test coverage: {str(e)}")
+            raise
+    
+    def analyze_defect_patterns(self, defects: List[Defect]) -> Dict[str, Any]:
+        """Analyze defect patterns with statistical insights"""
+        try:
+            if not defects:
+                return {
+                    'total_defects': 0,
+                    'patterns': {},
+                    'statistics': {},
+                    'analysis_time': datetime.utcnow()
+                }
+            
+            # Group defects by various attributes
+            by_severity = Counter(d.severity for d in defects)
+            by_type = Counter(d.defect_type for d in defects)
+            by_status = Counter(d.status for d in defects)
+            
+            # Calculate resolution times
+            resolution_times = []
+            for defect in defects:
+                if defect.resolved_at and defect.detected_at:
+                    resolution_time = (defect.resolved_at - defect.detected_at).days
+                    resolution_times.append(resolution_time)
+            
+            # Statistical analysis of resolution times
+            resolution_stats = None
+            if resolution_times:
+                resolution_stats = self.statistical_analyzer.calculate_basic_statistics(resolution_times)
+            
+            # Identify recurring patterns
+            recurring_patterns = self._identify_recurring_defect_patterns(defects)
+            
+            return {
+                'total_defects': len(defects),
+                'patterns': {
+                    'by_severity': dict(by_severity),
+                    'by_type': dict(by_type),
+                    'by_status': dict(by_status),
+                    'recurring_patterns': recurring_patterns
+                },
+                'resolution_statistics': asdict(resolution_stats) if resolution_stats else None,
+                'analysis_time': datetime.utcnow()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing defect patterns: {str(e)}")
+            raise
+    
+    def _identify_recurring_defect_patterns(self, defects: List[Defect]) -> List[Dict[str, Any]]:
+        """Identify recurring defect patterns"""
+        # Simple pattern matching based on description keywords
+        keyword_patterns = defaultdict(list)
+        
+        for defect in defects:
+            # Extract keywords from description (simplified)
+            words = defect.description.lower().split()
+            significant_words = [w for w in words if len(w) > 4]  # Words longer than 4 chars
+            
+            for word in significant_words[:3]:  # Take first 3 significant words
+                keyword_patterns[word].append(defect)
+        
+        # Find patterns with multiple occurrences
+        recurring = []
+        for keyword, defect_list in keyword_patterns.items():
+            if len(defect_list) > 1:
+                recurring.append({
+                    'pattern_keyword': keyword,
+                    'occurrence_count': len(defect_list),
+                    'defect_ids': [d.id for d in defect_list],
+                    'severity_distribution': Counter(d.severity for d in defect_list)
+                })
+        
+        return sorted(recurring, key=lambda x: x['occurrence_count'], reverse=True)[:10]
+    
+    def predict_risk_areas(self, historical_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Predict risk areas based on historical data"""
+        try:
+            risk_predictions = []
+            
+            # Analyze defect trends by test case
+            defect_by_test_case = defaultdict(int)
+            if 'defects' in historical_data:
+                for defect in historical_data['defects']:
+                    if 'test_case_id' in defect:
+                        defect_by_test_case[defect['test_case_id']] += 1
+            
+            # Identify high-risk test cases
+            high_risk_threshold = 2  # Test cases with 2+ defects
+            high_risk_test_cases = [
+                {'test_case_id': tc_id, 'defect_count': count}
+                for tc_id, count in defect_by_test_case.items()
+                if count >= high_risk_threshold
+            ]
+            
+            # Analyze coverage gaps as risk areas
+            coverage_risks = []
+            if 'coverage_data' in historical_data:
+                for req_id, coverage_info in historical_data['coverage_data'].items():
+                    if coverage_info.get('coverage_percentage', 0) < 50:
+                        coverage_risks.append({
+                            'requirement_id': req_id,
+                            'coverage_percentage': coverage_info.get('coverage_percentage', 0),
+                            'risk_level': 'high' if coverage_info.get('coverage_percentage', 0) < 30 else 'medium'
+                        })
+            
+            return {
+                'high_risk_test_cases': sorted(high_risk_test_cases, 
+                                             key=lambda x: x['defect_count'], reverse=True),
+                'coverage_risk_areas': coverage_risks,
+                'prediction_confidence': self._calculate_prediction_confidence(historical_data),
+                'prediction_time': datetime.utcnow()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error predicting risk areas: {str(e)}")
+            raise
+    
+    def _calculate_prediction_confidence(self, historical_data: Dict[str, Any]) -> float:
+        """Calculate confidence level for predictions"""
+        # Simple confidence calculation based on data availability
+        data_points = 0
+        
+        if 'defects' in historical_data:
+            data_points += len(historical_data['defects'])
+        
+        if 'coverage_data' in historical_data:
+            data_points += len(historical_data['coverage_data'])
+        
+        if 'test_cases' in historical_data:
+            data_points += len(historical_data['test_cases'])
+        
+        # Normalize to 0-1 scale
+        max_confidence = 0.9  # Never claim 100% confidence
+        confidence = min(max_confidence, data_points / 100)  # 100 data points = 90% confidence
+        
+        return confidence
+    
+    def generate_optimization_suggestions(self, test_suite_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate optimization suggestions based on analysis"""
+        try:
+            suggestions = []
+            
+            # Analyze test case quality scores
+            if 'test_cases' in test_suite_data:
+                low_quality_cases = [
+                    tc for tc in test_suite_data['test_cases']
+                    if tc.get('total_score', 0) < 60
+                ]
+                
+                if low_quality_cases:
+                    suggestions.append({
+                        'type': 'quality_improvement',
+                        'priority': 'high',
+                        'title': 'Improve Low-Quality Test Cases',
+                        'description': f'Found {len(low_quality_cases)} test cases with quality scores below 60%',
+                        'affected_items': [tc.get('test_case_id') for tc in low_quality_cases],
+                        'recommended_actions': [
+                            'Review test case clarity and completeness',
+                            'Enhance test steps and expected results',
+                            'Improve test data and preconditions'
+                        ]
+                    })
+            
+            # Analyze coverage gaps
+            if 'coverage_gaps' in test_suite_data:
+                coverage_gaps = test_suite_data['coverage_gaps']
+                if coverage_gaps:
+                    suggestions.append({
+                        'type': 'coverage_improvement',
+                        'priority': 'medium',
+                        'title': 'Address Coverage Gaps',
+                        'description': f'Found {len(coverage_gaps)} requirements with insufficient test coverage',
+                        'affected_items': [gap.get('requirement_id') for gap in coverage_gaps],
+                        'recommended_actions': [
+                            'Create additional test cases for uncovered requirements',
+                            'Add boundary and negative test scenarios',
+                            'Include performance and security test cases'
+                        ]
+                    })
+            
+            # Analyze defect patterns
+            if 'defect_patterns' in test_suite_data:
+                recurring_patterns = test_suite_data['defect_patterns'].get('recurring_patterns', [])
+                if recurring_patterns:
+                    suggestions.append({
+                        'type': 'defect_prevention',
+                        'priority': 'high',
+                        'title': 'Address Recurring Defect Patterns',
+                        'description': f'Identified {len(recurring_patterns)} recurring defect patterns',
+                        'affected_items': [pattern.get('pattern_keyword') for pattern in recurring_patterns],
+                        'recommended_actions': [
+                            'Review and strengthen test cases in problem areas',
+                            'Implement additional validation checks',
+                            'Consider root cause analysis for recurring issues'
+                        ]
+                    })
+            
+            # Sort suggestions by priority
+            priority_order = {'high': 3, 'medium': 2, 'low': 1}
+            suggestions.sort(key=lambda x: priority_order.get(x['priority'], 0), reverse=True)
+            
+            return suggestions
+            
+        except Exception as e:
+            logger.error(f"Error generating optimization suggestions: {str(e)}")
+            raise

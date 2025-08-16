@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="4" failures="0" skipped="0" tests="4" time="0.123" timestamp="2025-08-15T13:24:15.816290" hostname="Roberts-MacBookAir.local"><testcase classname="tests.test_acceptance.TestReportGeneration" name="test_generate_execution_report" time="0.023"><error message="failed on setup with &quot;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_acceptance.py:25: in auth_token
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_acceptance.TestReportGeneration" name="test_generate_defect_analysis_report" time="0.000"><error message="failed on setup with &quot;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_acceptance.py:25: in auth_token
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_acceptance.TestReportGeneration" name="test_generate_coverage_report" time="0.000"><error message="failed on setup with &quot;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_acceptance.py:25: in auth_token
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase><testcase classname="tests.test_acceptance.TestReportGeneration" name="test_export_report_pdf" time="0.006"><error message="failed on setup with &quot;assert 404 == 200&#10; +  where 404 = &lt;Response [404]&gt;.status_code&quot;">tests/test_acceptance.py:25: in auth_token
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = &lt;Response [404]&gt;.status_code</error></testcase></testsuite></testsuites>

@@ -33,6 +33,11 @@
         <span>数据分析</span>
       </el-menu-item>
       
+      <el-menu-item index="/reports">
+        <el-icon><Notebook /></el-icon>
+        <span>测试报告</span>
+      </el-menu-item>
+      
       <el-menu-item index="/knowledge">
         <el-icon><Collection /></el-icon>
         <span>知识管理</span>
@@ -41,6 +46,11 @@
       <el-menu-item index="/templates">
         <el-icon><Files /></el-icon>
         <span>模板管理</span>
+      </el-menu-item>
+      
+      <el-menu-item index="/monitoring">
+        <el-icon><Monitor /></el-icon>
+        <span>系统监控</span>
       </el-menu-item>
       
       <el-sub-menu index="system">

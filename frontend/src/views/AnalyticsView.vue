@@ -116,6 +116,57 @@
       </el-col>
     </el-row>
 
+    <!-- Intelligent Reporting Components -->
+    <el-row :gutter="20" style="margin-top: 20px;">
+      <!-- Coverage Heatmap -->
+      <el-col :span="24">
+        <CoverageHeatmap
+          title="测试覆盖率热力图"
+          :data="coverageData"
+          :loading="loading"
+          @cellClick="handleCoverageClick"
+          @detailView="handleCoverageDetail"
+        />
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="20" style="margin-top: 20px;">
+      <!-- Defect Analysis Chart -->
+      <el-col :span="12">
+        <DefectAnalysisChart
+          title="缺陷分析图表"
+          :data="defectData"
+          :loading="loading"
+          @defectClick="handleDefectClick"
+        />
+      </el-col>
+
+      <!-- Trend Analysis Chart -->
+      <el-col :span="12">
+        <TrendAnalysisChart
+          title="质量趋势分析"
+          :data="trendData"
+          :loading="loading"
+          @dataPointClick="handleTrendClick"
+          @dateRangeChange="handleDateRangeChange"
+          @exportData="handleExportData"
+        />
+      </el-col>
+    </el-row>
+
+    <!-- Statistics Dashboard -->
+    <el-row :gutter="20" style="margin-top: 20px;">
+      <el-col :span="24">
+        <StatsDashboard
+          :data="statsData"
+          @generateReport="handleGenerateReport"
+          @analyzeCoverage="handleAnalyzeCoverage"
+          @checkDefects="handleCheckDefects"
+          @exportData="handleExportData"
+        />
+      </el-col>
+    </el-row>
+
     <!-- Detailed Statistics -->
     <el-card style="margin-top: 20px;">
       <template #header>
@@ -192,6 +243,10 @@ import {
   RadarComponent
 } from 'echarts/components'
 import api from '@/api'
+import CoverageHeatmap from '@/components/charts/CoverageHeatmap.vue'
+import DefectAnalysisChart from '@/components/charts/DefectAnalysisChart.vue'
+import TrendAnalysisChart from '@/components/charts/TrendAnalysisChart.vue'
+import StatsDashboard from '@/components/charts/StatsDashboard.vue'
 
 use([
   CanvasRenderer,
@@ -240,6 +295,106 @@ const qualityDimensions = ref({
   clarity: 0
 })
 const generationTrend = ref<{date: string, count: number}[]>([])
+
+// Data for intelligent reporting components
+const coverageData = ref([
+  {
+    name: '座椅调节',
+    category: '核心功能',
+    coverage: 85,
+    covered_cases: 17,
+    total_cases: 20,
+    missing_areas: ['边界测试', '异常处理']
+  },
+  {
+    name: '加热功能',
+    category: '辅助功能',
+    coverage: 92,
+    covered_cases: 23,
+    total_cases: 25,
+    missing_areas: ['温度控制']
+  },
+  {
+    name: '记忆功能',
+    category: '高级功能',
+    coverage: 65,
+    covered_cases: 13,
+    total_cases: 20,
+    missing_areas: ['多用户场景', '数据持久化', '故障恢复']
+  }
+])
+
+const defectData = ref([
+  {
+    id: 1,
+    type: 'functional',
+    severity: 'high',
+    status: 'open',
+    detected_at: '2024-01-15T10:00:00Z',
+    description: '座椅调节功能在极限位置时响应异常'
+  },
+  {
+    id: 2,
+    type: 'performance',
+    severity: 'medium',
+    status: 'resolved',
+    detected_at: '2024-01-14T15:30:00Z',
+    resolved_at: '2024-01-15T09:00:00Z',
+    description: '加热功能启动时间超过预期'
+  },
+  {
+    id: 3,
+    type: 'security',
+    severity: 'critical',
+    status: 'open',
+    detected_at: '2024-01-13T08:45:00Z',
+    description: '记忆功能存在数据泄露风险'
+  }
+])
+
+const trendData = ref([
+  {
+    date: '2024-01-10',
+    value: 75,
+    change: 0,
+    change_rate: 0,
+    notes: '基准数据'
+  },
+  {
+    date: '2024-01-11',
+    value: 78,
+    change: 3,
+    change_rate: 4.0,
+    notes: '轻微上升'
+  },
+  {
+    date: '2024-01-12',
+    value: 82,
+    change: 4,
+    change_rate: 5.1,
+    notes: '持续改善'
+  },
+  {
+    date: '2024-01-13',
+    value: 79,
+    change: -3,
+    change_rate: -3.7,
+    notes: '小幅回落'
+  },
+  {
+    date: '2024-01-14',
+    value: 85,
+    change: 6,
+    change_rate: 7.6,
+    notes: '显著提升'
+  }
+])
+
+const statsData = ref({
+  overview: overviewData,
+  quality: qualityDimensions,
+  trends: generationTrend
+})
 
 onMounted(() => {
   loadAnalyticsData()
@@ -563,6 +718,43 @@ const getTestTypeText = (type: string) => {
     security: '安全测试'
   }
   return texts[type] || type
+}
+
+// Event handlers for intelligent reporting components
+const handleCoverageClick = (data: any) => {
+  ElMessage.info(`点击了覆盖率数据: ${data.name}`)
+}
+
+const handleCoverageDetail = (data: any) => {
+  ElMessage.info(`查看覆盖率详情: ${data.name}`)
+}
+
+const handleDefectClick = (defect: any) => {
+  ElMessage.info(`点击了缺陷: ${defect.description}`)
+}
+
+const handleTrendClick = (point: any) => {
+  ElMessage.info(`点击了趋势数据点: ${point.date}`)
+}
+
+const handleDateRangeChange = (range: [Date, Date]) => {
+  ElMessage.info(`日期范围变更: ${range[0].toLocaleDateString()} - ${range[1].toLocaleDateString()}`)
+}
+
+const handleExportData = (type?: string, range?: [Date, Date]) => {
+  ElMessage.success('数据导出中...')
+}
+
+const handleGenerateReport = () => {
+  ElMessage.info('开始生成报告...')
+}
+
+const handleAnalyzeCoverage = () => {
+  ElMessage.info('开始分析覆盖率...')
+}
+
+const handleCheckDefects = () => {
+  ElMessage.info('开始检查缺陷...')
 }
 </script>
 

@@ -29,6 +29,34 @@ class User(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    reports = relationship(
+        "Report",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    assigned_defects = relationship(
+        "Defect",
+        back_populates="assignee",
+        foreign_keys="Defect.assigned_to"
+    )
+    alert_rules = relationship(
+        "AlertRule",
+        back_populates="creator",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    acknowledged_alerts = relationship(
+        "Alert",
+        back_populates="acknowledger",
+        foreign_keys="Alert.acknowledged_by"
+    )
+    report_templates = relationship(
+        "ReportTemplate",
+        back_populates="creator",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Requirement(Base):
@@ -55,6 +83,12 @@ class Requirement(Base):
     )
     parsed_features = relationship(
         "ParsedFeature",
+        back_populates="requirement",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    coverage_analyses = relationship(
+        "CoverageAnalysis",
         back_populates="requirement",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -103,6 +137,12 @@ class TestCase(Base):
     user = relationship("User", back_populates="test_cases")
     evaluations = relationship(
         "TestCaseEvaluation",
+        back_populates="test_case",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    defects = relationship(
+        "Defect",
         back_populates="test_case",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -180,4 +220,148 @@ class GenerationLog(Base):
     cost = Column(Float)
     status = Column(String(20))  # success, failed, partial
     error_message = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# Intelligent Test Reporting Models
+
+class Report(Base):
+    __tablename__ = "reports"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    report_type = Column(String(50), nullable=False)  # execution, defect_analysis, coverage, trend, custom
+    template_id = Column(Integer, ForeignKey("report_templates.id"))
+    generated_by = Column(Integer, ForeignKey("users.id"))
+    generation_time = Column(DateTime, default=datetime.utcnow)
+    data_range_start = Column(DateTime)
+    data_range_end = Column(DateTime)
+    report_data = Column(JSON)
+    file_path = Column(String(500))
+    status = Column(String(20), default="generating")  # generating, completed, failed, expired
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    template = relationship("ReportTemplate", back_populates="reports")
+    user = relationship("User", back_populates="reports")
+
+
+class Defect(Base):
+    __tablename__ = "defects"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    test_case_id = Column(Integer, ForeignKey("test_cases.id"))
+    defect_type = Column(String(50), nullable=False)  # functional, performance, security, usability, compatibility
+    severity = Column(String(20), nullable=False)  # critical, high, medium, low
+    description = Column(Text, nullable=False)
+    root_cause = Column(Text)
+    reproduction_steps = Column(Text)
+    expected_behavior = Column(Text)
+    actual_behavior = Column(Text)
+    environment_info = Column(JSON)
+    status = Column(String(20), default="open")  # open, in_progress, resolved, closed, rejected
+    detected_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime)
+    assigned_to = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    test_case = relationship("TestCase", back_populates="defects")
+    assignee = relationship("User", back_populates="assigned_defects")
+
+
+class CoverageAnalysis(Base):
+    __tablename__ = "coverage_analysis"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    requirement_id = Column(Integer, ForeignKey("requirements.id"))
+    function_module = Column(String(100), nullable=False)
+    coverage_percentage = Column(Float, nullable=False, default=0.0)
+    covered_test_cases = Column(Integer, default=0)
+    total_test_cases = Column(Integer, default=0)
+    uncovered_areas = Column(JSON)  # List of uncovered functionality
+    coverage_details = Column(JSON)  # Detailed coverage breakdown
+    analysis_date = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    requirement = relationship("Requirement", back_populates="coverage_analyses")
+
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    rule_name = Column(String(100), nullable=False)
+    metric_type = Column(String(50), nullable=False)  # coverage_rate, defect_rate, execution_time, failure_rate
+    condition_operator = Column(String(10), nullable=False)  # >, <, >=, <=, ==, !=
+    threshold_value = Column(Float, nullable=False)
+    severity = Column(String(20), default="medium")  # critical, high, medium, low
+    notification_channels = Column(JSON)  # email, sms, webhook, in_app
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    creator = relationship("User", back_populates="alert_rules")
+    alerts = relationship("Alert", back_populates="rule", cascade="all, delete-orphan")
+
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    rule_id = Column(Integer, ForeignKey("alert_rules.id"))
+    alert_message = Column(Text, nullable=False)
+    current_value = Column(Float)
+    threshold_value = Column(Float)
+    severity = Column(String(20), nullable=False)
+    status = Column(String(20), default="active")  # active, acknowledged, resolved
+    triggered_at = Column(DateTime, default=datetime.utcnow)
+    acknowledged_at = Column(DateTime)
+    resolved_at = Column(DateTime)
+    acknowledged_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    rule = relationship("AlertRule", back_populates="alerts")
+    acknowledger = relationship("User", back_populates="acknowledged_alerts")
+
+
+class ReportTemplate(Base):
+    __tablename__ = "report_templates"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    template_name = Column(String(100), nullable=False)
+    template_type = Column(String(50), nullable=False)  # execution, defect_analysis, coverage, trend, custom
+    template_content = Column(Text, nullable=False)  # Template structure/layout definition
+    template_config = Column(JSON)  # Configuration for charts, filters, sections
+    description = Column(Text)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    is_default = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    usage_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    creator = relationship("User", back_populates="report_templates")
+    reports = relationship("Report", back_populates="template")
+
+
+class SystemMetric(Base):
+    __tablename__ = "system_metrics"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    metric_name = Column(String(100), nullable=False)
+    metric_type = Column(String(50), nullable=False)  # performance, business, system
+    metric_value = Column(Float, nullable=False)
+    unit = Column(String(20))  # percentage, seconds, count, bytes
+    tags = Column(JSON)  # Additional metadata
+    recorded_at = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)

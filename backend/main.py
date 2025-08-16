@@ -7,12 +7,13 @@ from contextlib import asynccontextmanager
 from .database import engine, get_db
 from .models import Base
 from .config import settings
+from .migrations import run_migration
 from .routers import auth, requirements, test_cases, templates, knowledge, generation
-from .routers import analytics
+from .routers import analytics, reports, monitoring
 
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Run database migration
+run_migration()
 
 
 @asynccontextmanager
@@ -48,6 +49,8 @@ app.include_router(templates.router, prefix=f"{settings.api_prefix}/templates", 
 app.include_router(knowledge.router, prefix=f"{settings.api_prefix}/knowledge", tags=["Knowledge Base"])
 app.include_router(generation.router, prefix=f"{settings.api_prefix}/generation", tags=["Generation"])
 app.include_router(analytics.router, prefix=f"{settings.api_prefix}/analytics", tags=["Analytics"])
+app.include_router(reports.router, prefix=f"{settings.api_prefix}/reports", tags=["Reports"])
+app.include_router(monitoring.router, prefix=f"{settings.api_prefix}/monitoring", tags=["Monitoring"])
 
 
 @app.get("/")

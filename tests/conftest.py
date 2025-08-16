@@ -59,4 +59,45 @@ def pytest_sessionstart(session):
     warnings.filterwarnings("ignore", category=pytest.PytestCollectionWarning)
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     warnings.filterwarnings("ignore", message="Importing 'parser.split_arg_string' is deprecated")
-    warnings.filterwarnings("ignore", message="'BaseCommand' is deprecated") 
+    warnings.filterwarnings("ignore", message="'BaseCommand' is deprecated")
+
+
+# Database test fixtures
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from backend.database import Base
+
+# Create test database
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test_api.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def override_get_db():
+    """Override database dependency for testing"""
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database():
+    """Set up test database"""
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+    yield
+    # Clean up
+    Base.metadata.drop_all(bind=engine)
+
+@pytest.fixture(autouse=True)
+def clean_database():
+    """Clean database before each test"""
+    db = TestingSessionLocal()
+    try:
+        # Delete all data from all tables
+        for table in reversed(Base.metadata.sorted_tables):
+            db.execute(table.delete())
+        db.commit()
+    finally:
+        db.close() 
