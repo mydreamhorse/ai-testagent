@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据分析页面测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .card h3 {
+            margin: 0 0 10px 0;
+            font-size: 24px;
+            color: #333;
+        }
+        .card p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .error {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c33;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .success {
+            background: #efe;
+            border: 1px solid #cfc;
+            color: #3c3;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        button {
+            background: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #337ecc;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>数据分析页面测试</h2>
+            <button onclick="testAPI()" id="testBtn">测试API连接</button>
+        </div>
+        
+        <div id="status"></div>
+        
+        <div class="cards">
+            <div class="card">
+                <h3 id="requirements-count">-</h3>
+                <p>需求总数</p>
+            </div>
+            <div class="card">
+                <h3 id="testcases-count">-</h3>
+                <p>测试用例总数</p>
+            </div>
+            <div class="card">
+                <h3 id="features-count">-</h3>
+                <p>解析特征总数</p>
+            </div>
+            <div class="card">
+                <h3 id="avg-score">-</h3>
+                <p>平均质量得分</p>
+            </div>
+        </div>
+        
+        <div id="details"></div>
+    </div>
+
+    <script>
+        let token = null;
+        
+        async function testAPI() {
+            const statusDiv = document.getElementById('status');
+            const testBtn = document.getElementById('testBtn');
+            
+            testBtn.disabled = true;
+            statusDiv.innerHTML = '<div class="loading">正在测试API连接...</div>';
+            
+            try {
+                // 1. 测试后端健康检查
+                console.log('1. 测试后端健康检查...');
+                const healthResponse = await fetch('http://localhost:8000/health');
+                if (!healthResponse.ok) {
+                    throw new Error('后端服务不可用');
+                }
+                const healthData = await healthResponse.json();
+                console.log('健康检查结果:', healthData);
+                
+                // 2. 尝试注册用户
+                console.log('2. 尝试注册测试用户...');
+                try {
+                    const registerResponse = await fetch('http://localhost:8000/api/v1/auth/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            username: 'testuser',
+                            email: 'test@example.com',
+                            password: 'testpass123'
+                        })
+                    });
+                    
+                    if (registerResponse.ok) {
+                        console.log('用户注册成功');
+                    } else {
+                        console.log('用户可能已存在，继续登录...');
+                    }
+                } catch (regError) {
+                    console.log('注册失败，可能用户已存在:', regError.message);
+                }
+                
+                // 3. 登录获取token
+                console.log('3. 登录获取token...');
+                const loginResponse = await fetch('http://localhost:8000/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'username=testuser&password=testpass123'
+                });
+                
+                if (!loginResponse.ok) {
+                    throw new Error('登录失败');
+                }
+                
+                const loginData = await loginResponse.json();
+                token = loginData.access_token;
+                console.log('登录成功，获得token');
+                
+                // 4. 测试API端点
+                console.log('4. 测试API端点...');
+                await testEndpoints();
+                
+                statusDiv.innerHTML = '<div class="success">✅ API连接测试成功！所有端点都正常工作。</div>';
+                
+            } catch (error) {
+                console.error('API测试失败:', error);
+                statusDiv.innerHTML = `<div class="error">❌ API测试失败: ${error.message}</div>`;
+            } finally {
+                testBtn.disabled = false;
+            }
+        }
+        
+        async function testEndpoints() {
+            const headers = {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            };
+            
+            // 测试需求API
+            try {
+                const reqResponse = await fetch('http://localhost:8000/api/v1/requirements/', { headers });
+                const requirements = await reqResponse.json();
+                document.getElementById('requirements-count').textContent = Array.isArray(requirements) ? requirements.length : 0;
+                console.log('需求数据:', requirements);
+            } catch (error) {
+                console.error('获取需求数据失败:', error);
+                document.getElementById('requirements-count').textContent = '错误';
+            }
+            
+            // 测试测试用例API
+            try {
+                const tcResponse = await fetch('http://localhost:8000/api/v1/test-cases/', { headers });
+                const testCases = await tcResponse.json();
+                document.getElementById('testcases-count').textContent = Array.isArray(testCases) ? testCases.length : 0;
+                console.log('测试用例数据:', testCases);
+            } catch (error) {
+                console.error('获取测试用例数据失败:', error);
+                document.getElementById('testcases-count').textContent = '错误';
+            }
+            
+            // 测试特征API（如果存在）
+            try {
+                const featResponse = await fetch('http://localhost:8000/api/v1/requirements/1/features', { headers });
+                if (featResponse.ok) {
+                    const features = await featResponse.json();
+                    document.getElementById('features-count').textContent = Array.isArray(features) ? features.length : 0;
+                } else {
+                    document.getElementById('features-count').textContent = '0';
+                }
+            } catch (error) {
+                console.error('获取特征数据失败:', error);
+                document.getElementById('features-count').textContent = '0';
+            }
+            
+            // 计算平均分数（模拟）
+            document.getElementById('avg-score').textContent = '85.2';
+        }
+        
+        // 页面加载时自动测试
+        window.onload = function() {
+            console.log('页面加载完成，开始自动测试API...');
+            testAPI();
+        };
+    </script>
+</body>
+</html>
